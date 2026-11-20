@@ -41,7 +41,7 @@ curl -fsSL https://raw.githubusercontent.com/eooce/ssh_tool/main/ssh_tool.sh -o 
 * 官方更新的[ToS](https://forum.serv00.com/d/2787-april-cleaning-and-new-tos),自行斟酌是否安装
 * 一键四协议安装脚本，vmess-ws|vmess-ws-tls(argo)|hy2|tuic5默认解锁GPT和奈飞
 * 支持自定义哪吒参数、Argo等参数随脚本一起运行
-* 列如：UUID=123456 ARGO_DOMAIN=2go.admin.com ARGO_AUTH=abc123 UPLOAD_URL=https://merge.serv00.net
+* 列如：UUID=bc97f674-c578-4940-9234-0a1da460b001 ARGO_DOMAIN=2go.admin.com ARGO_AUTH=abc123 UPLOAD_URL=https://merge.serv00.net
 * v0哪吒变量形式:NEZHA_SERVER=nezha.abc.com  v1哪吒变量形式:NEZHA_SERVER=nezha.abc.com:8008,v1不需要NEZHA_PORT变量
 * 需要订阅自动上传到汇聚订阅器，需先部署Merge-sub项目，部署时填写UPLOAD_URL环境变量为部署的首页地址,例如：UPLOAD_URL=https://merge.serv00.net
 * 客户端跳过证书验证需设置为true，否则hy2和tuic不通

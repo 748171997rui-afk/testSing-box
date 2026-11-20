@@ -13,7 +13,31 @@ reading() { read -p "$(red "$1")" "$2"; }
 export LC_ALL=C
 HOSTNAME=$(hostname)
 USERNAME=$(whoami | tr '[:upper:]' '[:lower:]')
-export UUID=${UUID:-$(uuidgen -r)}  
+generate_valid_uuid() {
+    local candidate="${1:-}"
+    local uuid_regex='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+    if [[ "$candidate" =~ $uuid_regex ]]; then
+        echo "$candidate"
+        return 0
+    fi
+    [ -n "$candidate" ] && yellow "检测到UUID格式不合法，TUIC需要标准36位UUID，已自动重新生成" >&2
+    local generated=""
+    if command -v uuidgen >/dev/null 2>&1; then
+        generated=$( (uuidgen -r 2>/dev/null || uuidgen 2>/dev/null) | tr -d '\r\n')
+    fi
+    if [[ ! "$generated" =~ $uuid_regex ]] && [ -r /proc/sys/kernel/random/uuid ]; then
+        generated=$(cat /proc/sys/kernel/random/uuid 2>/dev/null | tr -d '\r\n')
+    fi
+    if [[ ! "$generated" =~ $uuid_regex ]]; then
+        local hex
+        hex=$(od -x /dev/urandom 2>/dev/null | head -1 | awk '{OFS=""; print $2,$3,$4,$5,$6,$7,$8,$9}' | tr 'A-F' 'a-f')
+        if [ ${#hex} -ge 32 ]; then
+            generated="${hex:0:8}-${hex:8:4}-4${hex:13:3}-8${hex:17:3}-${hex:20:12}"
+        fi
+    fi
+    echo "$generated"
+}
+export UUID=$(generate_valid_uuid "${UUID:-}")  
 export NEZHA_SERVER=${NEZHA_SERVER:-''}  # v1哪吒形式：nezha.abc.com:8008,v0哪吒形式：nezha.abc.com
 export NEZHA_PORT=${NEZHA_PORT:-''}      # v1哪吒不需要此变量
 export NEZHA_KEY=${NEZHA_KEY:-''}        # v1的NZ_CLIENT_SECRET或v0的agent密钥

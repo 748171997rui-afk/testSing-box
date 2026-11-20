@@ -37,6 +37,30 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# 生成标准36位UUID v4
+generate_uuid() {
+    local generated=""
+    if [ -r /proc/sys/kernel/random/uuid ]; then
+        generated=$(cat /proc/sys/kernel/random/uuid 2>/dev/null | tr -d '\r\n')
+    fi
+    if [[ ! "$generated" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]] && command_exists uuidgen; then
+        generated=$( (uuidgen -r 2>/dev/null || uuidgen 2>/dev/null) | tr -d '\r\n')
+    fi
+    if [[ ! "$generated" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
+        local hex
+        hex=$(od -x /dev/urandom 2>/dev/null | head -1 | awk '{OFS=""; print $2,$3,$4,$5,$6,$7,$8,$9}' | tr 'A-F' 'a-f')
+        if [ ${#hex} -ge 32 ]; then
+            generated="${hex:0:8}-${hex:8:4}-4${hex:13:3}-8${hex:17:3}-${hex:20:12}"
+        fi
+    fi
+    echo "$generated"
+}
+
+# 校验是否为标准36位UUID
+is_valid_uuid() {
+    [[ "$1" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]
+}
+
 # 检查服务状态通用函数
 check_service() {
     local service_name=$1
@@ -221,7 +245,7 @@ install_singbox() {
     nginx_port=$(($vless_port + 1)) 
     tuic_port=$(($vless_port + 2))
     hy2_port=$(($vless_port + 3)) 
-    uuid=$(cat /proc/sys/kernel/random/uuid)
+    uuid=$(generate_uuid)
     password=$(< /dev/urandom tr -dc 'A-Za-z0-9' | head -c 24)
     output=$(/etc/sing-box/sing-box generate reality-keypair)
     private_key=$(echo "${output}" | awk '/PrivateKey:/ {print $2}')
@@ -998,17 +1022,21 @@ change_config() {
             esac
             ;;
         2)
-            reading "\n请输入新的UUID: " new_uuid
-            [ -z "$new_uuid" ] && new_uuid=$(cat /proc/sys/kernel/random/uuid)
+            reading "\n请输入新的UUID(直接回车随机生成标准UUID): " new_uuid
+            if [ -z "$new_uuid" ]; then
+                new_uuid=$(generate_uuid)
+            elif ! is_valid_uuid "$new_uuid"; then
+                red "\nUUID格式不合法！TUIC等协议要求标准36位UUID(如 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)\n"
+                return 1
+            fi
             sed -i -E '
-                s/"uuid": "([a-f0-9-]+)"/"uuid": "'"$new_uuid"'"/g;
-                s/"uuid": "([a-f0-9-]+)"$/\"uuid\": \"'$new_uuid'\"/g;
+                s/"uuid": "([^"]+)"/"uuid": "'"$new_uuid"'"/g;
                 s/"password": "([a-f0-9-]+)"/"password": "'"$new_uuid"'"/g
             ' $config_dir
 
             restart_singbox
             sed -i -E 's/(vless:\/\/|hysteria2:\/\/)[^@]*(@.*)/\1'"$new_uuid"'\2/' $client_dir
-            sed -i "s/tuic:\/\/[0-9a-f\-]\{36\}/tuic:\/\/$new_uuid/" /etc/sing-box/url.txt
+            sed -i -E "s#(tuic://)[^:@]+(:[^@]+@)#\1${new_uuid}\2#" "$client_dir"
             isp=$(curl -s https://speed.cloudflare.com/meta | awk -F\" '{print $26"-"$18}' | sed -e 's/ /_/g')
             argodomain=$(grep -oE 'https://[[:alnum:]+\.-]+\.trycloudflare\.com' "${work_dir}/argo.log" | sed 's@https://@@')
             VMESS="{ \"v\": \"2\", \"ps\": \"${isp}\", \"add\": \"www.visa.com.tw\", \"port\": \"443\", \"id\": \"${new_uuid}\", \"aid\": \"0\", \"scy\": \"none\", \"net\": \"ws\", \"type\": \"none\", \"host\": \"${argodomain}\", \"path\": \"/vmess-argo?ed=2560\", \"tls\": \"tls\", \"sni\": \"${argodomain}\", \"alpn\": \"\", \"fp\": \"\", \"allowlnsecure\": \"flase\"}"
